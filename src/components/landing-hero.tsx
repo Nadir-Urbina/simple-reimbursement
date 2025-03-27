@@ -82,7 +82,7 @@ export function LandingHero() {
           <div className="relative mx-auto max-w-5xl rounded-xl overflow-hidden shadow-2xl border">
             <div className="absolute inset-0 bg-gradient-to-r from-brand-purple/10 to-brand-blue/10 backdrop-blur-[1px]" />
             <img
-              src="/placeholder.svg?height=600&width=1200"
+              src="/heroImage.png"
               alt="SimpleReimbursement Dashboard"
               className="w-full h-auto relative z-10"
             />
