@@ -1,102 +1,73 @@
-'use client';
+"use client";
 
-import { useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { CheckCircle2, X } from 'lucide-react';
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { CheckCircle2 } from "lucide-react";
+import Link from "next/link";
 
-export default function OrganizationCompleteComponent() {
+// Extract the component that uses useSearchParams into a separate client component
+function OrganizationCompleteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState<'success' | 'error' | 'processing'>('processing');
+  const organizationName = searchParams.get("name") || "your organization";
+  const email = searchParams.get("email") || "the admin email";
 
   useEffect(() => {
-    const setupIntentId = searchParams.get('setup_intent');
-    const setupIntentClientSecret = searchParams.get('setup_intent_client_secret');
-    const redirect_status = searchParams.get('redirect_status');
-
-    if (redirect_status === 'succeeded') {
-      setStatus('success');
-    } else if (setupIntentId && setupIntentClientSecret) {
-      // Validate the setup intent with your backend
-      validateSetupIntent(setupIntentId, setupIntentClientSecret);
-    } else {
-      setStatus('error');
-    }
-  }, [searchParams]);
-
-  const validateSetupIntent = async (setupIntentId: string, clientSecret: string) => {
-    try {
-      const response = await fetch('/api/payment/validate-setup', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          setupIntentId,
-          clientSecret,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to validate setup intent');
-      }
-
-      const data = await response.json();
-      if (data.success) {
-        setStatus('success');
-      } else {
-        setStatus('error');
-      }
-    } catch (error) {
-      console.error('Error validating setup intent:', error);
-      setStatus('error');
-    }
-  };
-
-  const handleContinue = () => {
-    if (status === 'success') {
-      router.push('/admin/setup');
-    } else {
-      router.push('/register/organization');
-    }
-  };
+    // The admin will need to check their email for the temporary password
+    // This page is just a confirmation that the organization has been created
+  }, []);
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-muted/40">
+    <div className="container flex min-h-screen items-center justify-center">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle className="text-2xl">
-            {status === 'processing' && 'Processing Your Registration'}
-            {status === 'success' && 'Registration Complete'}
-            {status === 'error' && 'Registration Error'}
-          </CardTitle>
+        <CardHeader className="text-center">
+          <CheckCircle2 className="mx-auto h-12 w-12 text-green-500 mb-4" />
+          <CardTitle className="text-2xl">Organization Created!</CardTitle>
           <CardDescription>
-            {status === 'processing' && 'Please wait while we confirm your payment...'}
-            {status === 'success' && 'Your organization has been successfully created!'}
-            {status === 'error' && 'There was an issue with your registration.'}
+            {organizationName} has been successfully registered
           </CardDescription>
         </CardHeader>
-        <CardContent className="flex justify-center py-8">
-          {status === 'processing' && (
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-          )}
-          {status === 'success' && <CheckCircle2 className="h-16 w-16 text-green-500" />}
-          {status === 'error' && <X className="h-16 w-16 text-red-500" />}
+        <CardContent className="space-y-4">
+          <div className="rounded-lg bg-muted p-4">
+            <p className="text-sm">
+              We've sent an email to <strong>{email}</strong> with instructions on how to access your admin account.
+            </p>
+          </div>
+          <div className="text-sm text-muted-foreground">
+            <p>What happens next:</p>
+            <ol className="list-decimal ml-4 mt-2 space-y-1">
+              <li>Check your email for your temporary password</li>
+              <li>Login to your admin account</li>
+              <li>Complete your organization setup</li>
+              <li>Invite team members to join</li>
+            </ol>
+          </div>
         </CardContent>
-        <CardFooter>
-          <Button
-            className="w-full"
-            onClick={handleContinue}
-            disabled={status === 'processing'}
-          >
-            {status === 'success' && 'Continue to Setup'}
-            {status === 'error' && 'Try Again'}
-            {status === 'processing' && 'Please Wait...'}
+        <CardFooter className="flex justify-center">
+          <Button onClick={() => router.push("/admin/setup")}>
+            Continue to Admin Setup
           </Button>
         </CardFooter>
       </Card>
     </div>
+  );
+}
+
+// Main page component with Suspense boundary
+export default function OrganizationCompletePage() {
+  return (
+    <Suspense fallback={
+      <div className="container flex min-h-screen items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <CardTitle className="text-2xl">Loading...</CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
+    }>
+      <OrganizationCompleteContent />
+    </Suspense>
   );
 } 

@@ -1,244 +1,247 @@
 "use client"
 
-import { useState } from "react"
+import { Suspense, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { formatCurrency, formatDate } from "@/lib/utils"
+import { Label } from "@/components/ui/label"
+import { Loader2, CheckCircle, XCircle, ArrowLeft } from "lucide-react"
+import { useAuth } from "@/hooks/use-auth"
 import { useToast } from "@/hooks/use-toast"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { CheckCircle, Clock, FileText, Loader2, MessageSquare, UserCheck, XCircle } from "lucide-react"
 
-export default function ExpenseDetailPage({ params }: { params: { id: string } }) {
-  const [isApproving, setIsApproving] = useState(false)
-  const [isRejecting, setIsRejecting] = useState(false)
-  const [isRequestingManager, setIsRequestingManager] = useState(false)
-  const [comments, setComments] = useState("")
+// Mock expense data
+const mockExpense = {
+  id: "exp-1234",
+  title: "Client Lunch Meeting",
+  amount: 78.50,
+  date: "2023-09-15",
+  category: "Meals & Entertainment",
+  description: "Lunch meeting with potential client to discuss new contract opportunities",
+  receiptUrl: "https://placehold.co/600x400/png",
+  status: "pending",
+  submittedBy: {
+    id: "user-1",
+    name: "Alex Johnson",
+    email: "alex@example.com"
+  },
+  submittedAt: "2023-09-15T14:30:00Z"
+}
+
+function ApprovalDetailContent({ params }: { params: { id: string } }) {
   const router = useRouter()
+  const { user } = useAuth()
   const { toast } = useToast()
+  
+  const [loading, setLoading] = useState(true)
+  const [expense, setExpense] = useState<typeof mockExpense | null>(null)
+  const [comment, setComment] = useState("")
+  const [approving, setApproving] = useState(false)
+  const [rejecting, setRejecting] = useState(false)
+  
+  useEffect(() => {
+    // Redirect to login if not authenticated
+    if (!user && !loading) {
+      router.push('/login')
+      return
+    }
 
-  // In a real app, you would fetch this data from your API
-  const expense = {
-    id: params.id,
-    employee: {
-      name: "Michael Brown",
-      email: "michael@example.com",
-      initials: "MB",
-    },
-    description: "Conference registration",
-    category: "Events",
-    amount: 499.0,
-    date: "2023-06-10",
-    status: "pending",
-    urgent: true,
-    notes: "Annual industry conference in Chicago. Registration includes access to all sessions and workshops.",
-    receiptUrl: "/placeholder.svg?height=600&width=400",
-  }
-
+    // Simulate fetching expense data
+    const fetchExpense = async () => {
+      try {
+        // In a real app, this would be an API call
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        setExpense(mockExpense)
+      } catch (error) {
+        console.error("Error fetching expense:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load expense details",
+          variant: "destructive"
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+    
+    fetchExpense()
+  }, [user, router, loading, params.id, toast])
+  
   const handleApprove = async () => {
-    setIsApproving(true)
-
+    setApproving(true)
     try {
-      // In a real app, you would submit this to your API
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      
       toast({
-        title: "Expense approved",
-        description: "The expense has been approved successfully.",
+        title: "Expense Approved",
+        description: "The expense has been approved successfully",
       })
-
+      
+      // Redirect back to approvals list
       router.push("/admin/approvals")
     } catch (error) {
       toast({
         title: "Error",
-        description: "There was an error approving the expense.",
-        variant: "destructive",
+        description: "Failed to approve expense",
+        variant: "destructive"
       })
     } finally {
-      setIsApproving(false)
+      setApproving(false)
     }
   }
-
+  
   const handleReject = async () => {
-    setIsRejecting(true)
-
-    try {
-      // In a real app, you would submit this to your API
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
+    if (!comment.trim()) {
       toast({
-        title: "Expense rejected",
-        description: "The expense has been rejected.",
+        title: "Comment Required",
+        description: "Please provide a reason for rejection",
+        variant: "destructive"
       })
-
+      return
+    }
+    
+    setRejecting(true)
+    try {
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 1500))
+      
+      toast({
+        title: "Expense Rejected",
+        description: "The expense has been rejected",
+      })
+      
+      // Redirect back to approvals list
       router.push("/admin/approvals")
     } catch (error) {
       toast({
         title: "Error",
-        description: "There was an error rejecting the expense.",
-        variant: "destructive",
+        description: "Failed to reject expense",
+        variant: "destructive"
       })
     } finally {
-      setIsRejecting(false)
+      setRejecting(false)
     }
   }
-
-  const handleRequestManagerApproval = async () => {
-    setIsRequestingManager(true)
-
-    try {
-      // In a real app, you would submit this to your API
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      toast({
-        title: "Manager approval requested",
-        description: "A request has been sent to the employee's manager.",
-      })
-
-      router.push("/admin/approvals")
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "There was an error requesting manager approval.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsRequestingManager(false)
-    }
+  
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[300px]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
   }
-
+  
+  if (!expense) {
+    return (
+      <div className="space-y-6">
+        <Button variant="ghost" onClick={() => router.push("/admin/approvals")}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Approvals
+        </Button>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Expense Not Found</CardTitle>
+            <CardDescription>
+              The expense you're looking for could not be found or you don't have permission to view it.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter>
+            <Button variant="outline" onClick={() => router.push("/admin/approvals")}>
+              Return to Approvals
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    )
+  }
+  
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Expense Details</h1>
-        <Badge variant="outline" className="text-base px-3 py-1">
-          {expense.status === "pending" ? "Pending Review" : expense.status}
-        </Badge>
-      </div>
-
-      <div className="grid gap-6 md:grid-cols-3">
-        <div className="md:col-span-2 space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Expense Information</CardTitle>
-              <CardDescription>Review the details of this expense</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-center gap-4">
-                <Avatar className="h-10 w-10">
-                  <AvatarImage src={expense.employee.avatar} alt={expense.employee.name} />
-                  <AvatarFallback>{expense.employee.initials}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{expense.employee.name}</p>
-                  <p className="text-sm text-muted-foreground">{expense.employee.email}</p>
-                </div>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Description</p>
-                  <p>{expense.description}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Category</p>
-                  <p>{expense.category}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Amount</p>
-                  <p className="text-lg font-bold">{formatCurrency(expense.amount)}</p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-muted-foreground">Date</p>
-                  <p>{formatDate(expense.date)}</p>
-                </div>
-              </div>
-
+      <Button variant="ghost" onClick={() => router.push("/admin/approvals")}>
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Back to Approvals
+      </Button>
+      
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>{expense.title}</CardTitle>
+            <CardDescription>
+              Expense #{expense.id} submitted on {new Date(expense.submittedAt).toLocaleDateString()}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="text-sm font-medium text-muted-foreground mb-1">Notes</p>
-                <p className="text-sm">{expense.notes}</p>
+                <Label className="text-sm text-muted-foreground">Amount</Label>
+                <p className="text-xl font-bold">${expense.amount.toFixed(2)}</p>
               </div>
-            </CardContent>
-          </Card>
-
+              <div>
+                <Label className="text-sm text-muted-foreground">Category</Label>
+                <p>{expense.category}</p>
+              </div>
+            </div>
+            
+            <div>
+              <Label className="text-sm text-muted-foreground">Date</Label>
+              <p>{new Date(expense.date).toLocaleDateString()}</p>
+            </div>
+            
+            <div>
+              <Label className="text-sm text-muted-foreground">Description</Label>
+              <p className="text-sm">{expense.description}</p>
+            </div>
+            
+            <div>
+              <Label className="text-sm text-muted-foreground">Submitted By</Label>
+              <p>{expense.submittedBy.name} ({expense.submittedBy.email})</p>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <div className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Receipt</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="rounded-md border overflow-hidden">
-                <img
-                  src={expense.receiptUrl || "/placeholder.svg"}
-                  alt="Receipt"
-                  className="w-full max-h-96 object-contain"
+              <div className="border rounded-md overflow-hidden">
+                <img 
+                  src={expense.receiptUrl} 
+                  alt="Receipt" 
+                  className="w-full h-auto" 
                 />
               </div>
             </CardContent>
           </Card>
-        </div>
-
-        <div className="space-y-6">
+          
           <Card>
             <CardHeader>
-              <CardTitle>Review Actions</CardTitle>
-              <CardDescription>Approve or reject this expense</CardDescription>
+              <CardTitle>Approval Action</CardTitle>
+              <CardDescription>
+                Review the expense details and make your decision
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Comments</label>
-                <Textarea
-                  placeholder="Add comments about this expense..."
-                  rows={4}
-                  value={comments}
-                  onChange={(e) => setComments(e.target.value)}
-                />
+                <Label htmlFor="comment">Comment (required for rejection)</Label>
+                <textarea
+                  id="comment"
+                  className="min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder="Enter your comments here..."
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                ></textarea>
               </div>
             </CardContent>
-            <CardFooter className="flex flex-col gap-2">
-              <Button
-                className="w-full"
-                onClick={handleApprove}
-                disabled={isApproving || isRejecting || isRequestingManager}
-              >
-                {isApproving ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Approving...
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle className="mr-2 h-4 w-4" />
-                    Approve Expense
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={handleRequestManagerApproval}
-                disabled={isApproving || isRejecting || isRequestingManager}
-              >
-                {isRequestingManager ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Requesting...
-                  </>
-                ) : (
-                  <>
-                    <UserCheck className="mr-2 h-4 w-4" />
-                    Request Manager Approval
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="destructive"
-                className="w-full"
+            <CardFooter className="flex justify-between">
+              <Button 
+                variant="destructive" 
                 onClick={handleReject}
-                disabled={isApproving || isRejecting || isRequestingManager}
+                disabled={rejecting || approving}
               >
-                {isRejecting ? (
+                {rejecting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Rejecting...
@@ -246,53 +249,50 @@ export default function ExpenseDetailPage({ params }: { params: { id: string } }
                 ) : (
                   <>
                     <XCircle className="mr-2 h-4 w-4" />
-                    Reject Expense
+                    Reject
+                  </>
+                )}
+              </Button>
+              <Button 
+                onClick={handleApprove}
+                disabled={rejecting || approving}
+              >
+                {approving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Approving...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                    Approve
                   </>
                 )}
               </Button>
             </CardFooter>
           </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Activity Log</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-                    <FileText className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">Expense submitted</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(expense.date, true)}</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-                    <Clock className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">Pending review</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(expense.date, true)}</p>
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted">
-                    <MessageSquare className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">System notification</p>
-                    <p className="text-xs">This expense exceeds the auto-approval threshold of $200</p>
-                    <p className="text-xs text-muted-foreground">{formatDate(expense.date, true)}</p>
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </div>
+  )
+}
+
+export default function ApprovalDetailPage({ params }: { params: { id: string } }) {
+  return (
+    <Suspense fallback={
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Loading expense details...</CardTitle>
+          </CardHeader>
+          <CardContent className="flex justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <ApprovalDetailContent params={params} />
+    </Suspense>
   )
 }
 

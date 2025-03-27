@@ -1,293 +1,306 @@
 "use client";
 
+import { Suspense } from "react";
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { db, auth } from "@/lib/firebase";
 import { collection, query, where, getDocs, doc, getDoc, updateDoc, serverTimestamp, setDoc } from "firebase/firestore";
-import { createUserWithEmailAndPassword, updateProfile, signInWithEmailAndPassword } from "firebase/auth";
+import { createUserWithEmailAndPassword, updateProfile, signInWithEmailAndPassword, getAuth, sendPasswordResetEmail, sendSignInLinkToEmail } from "firebase/auth";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { CheckCircle } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-export default function InvitePage() {
-  // Use the useParams hook instead of destructuring from props
-  const params = useParams();
-  const inviteCode = params.code as string;
-
-  const [invite, setInvite] = useState<any | null>(null);
-  const [inviteDocId, setInviteDocId] = useState<string | null>(null);
+// Inner component that uses the router
+function InviteContent({ params }: { params: { code: string } }) {
+  const router = useRouter();
+  const [invite, setInvite] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [accepting, setAccepting] = useState(false);
-  const [expired, setExpired] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState("");
-  const [passwordless, setPasswordless] = useState(false);
-  
-  const router = useRouter();
-  const { toast } = useToast();
-  
+  const [activeTab, setActiveTab] = useState<string>("passwordless");
+  const [acceptComplete, setAcceptComplete] = useState(false);
+
   useEffect(() => {
-    const fetchInvite = async () => {
-      if (!inviteCode) {
-        setError("Invalid invitation link.");
+    async function fetchInvite() {
+      try {
+        const inviteRef = doc(db, "invites", params.code);
+        const inviteSnap = await getDoc(inviteRef);
+        
+        if (inviteSnap.exists()) {
+          const inviteData = inviteSnap.data();
+          setInvite(inviteData);
+          setEmail(inviteData.email || "");
+        } else {
+          toast({
+            title: "Invalid Invitation",
+            description: "This invitation link is invalid or has expired.",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching invite:", error);
+        toast({
+          title: "Error",
+          description: "There was an error retrieving your invitation.",
+          variant: "destructive",
+        });
+      } finally {
         setLoading(false);
+      }
+    }
+
+    fetchInvite();
+  }, [params.code]);
+
+  const handleAcceptInvite = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setJoining(true);
+
+    try {
+      if (!invite) {
+        throw new Error("Invalid invitation");
+      }
+
+      // Get auth instance
+      const auth = getAuth();
+      let userCredential;
+
+      if (activeTab === "password") {
+        // Create a new user with email and password
+        userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      } else {
+        // Send sign-in link for passwordless authentication
+        const actionCodeSettings = {
+          url: window.location.href,
+          handleCodeInApp: true,
+        };
+        await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+        localStorage.setItem("emailForSignIn", email);
+        
+        toast({
+          title: "Magic Link Sent",
+          description: "Check your email for the sign-in link to complete your account setup.",
+        });
+        
+        setJoining(false);
         return;
       }
 
-      try {
-        console.log("Fetching invite with code:", inviteCode);
-        
-        // Query for invite with this code (searching by field)
-        const invitesRef = collection(db, "invites");
-        const q = query(invitesRef, where("code", "==", inviteCode));
-        const querySnapshot = await getDocs(q);
-        
-        if (querySnapshot.empty) {
-          setError("This invitation link is invalid or has already been used.");
-          setLoading(false);
-          return;
-        }
-        
-        // Get the invite document from the query result
-        const inviteDoc = querySnapshot.docs[0];
-        const inviteData = inviteDoc.data();
-        setInviteDocId(inviteDoc.id);
-        
-        // Check if expired
-        const expiryDate = inviteData.expiresAt?.toDate();
-        if (expiryDate && new Date() > expiryDate) {
-          setExpired(true);
-          setError("This invitation has expired.");
-          setLoading(false);
-          return;
-        }
-        
-        // Check if already accepted
-        if (inviteData.status === "accepted") {
-          setError("This invitation has already been accepted.");
-          setLoading(false);
-          return;
-        }
-        
-        setInvite(inviteData);
-        if (inviteData.name) {
-          setName(inviteData.name);
-        }
-        setLoading(false);
-      } catch (error) {
-        console.error("Error fetching invite:", error);
-        setError("Failed to load invitation. Please try again.");
-        setLoading(false);
-      }
-    };
-    
-    if (inviteCode) {
-      fetchInvite();
-    }
-  }, [inviteCode]);
-  
-  const handleAcceptInvite = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!invite || !inviteDocId) return;
-    
-    if (!passwordless && !password) {
-      setError("Please set a password.");
-      return;
-    }
-    
-    if (!passwordless && password !== confirmPassword) {
-      setError("Passwords do not match.");
-      return;
-    }
-    
-    if (!passwordless && password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-    
-    setAccepting(true);
-    setError("");
-    
-    try {
-      // Create user in Firebase Auth
-      const { user } = await createUserWithEmailAndPassword(auth, invite.email, password || Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12));
-      
-      // Update user profile
-      await updateProfile(user, {
-        displayName: name,
-      });
-      
-      // Create user document in Firestore (using setDoc instead of updateDoc)
+      // Get the user from the credential
+      const user = userCredential.user;
+
+      // Create a user document in Firestore
       await setDoc(doc(db, "users", user.uid), {
-        name,
-        email: invite.email,
-        phone: invite.phone || null,
-        role: invite.role,
-        permissions: invite.permissions,
+        uid: user.uid,
+        email: email,
+        displayName: name,
         organizationId: invite.organizationId,
-        managerId: invite.managerId || null,
-        managerEmail: invite.managerEmail || null,
-        inviteStatus: "accepted",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        passwordlessAuth: passwordless,
+        role: invite.role || "user",
+        createdAt: new Date(),
       });
-      
-      // Update the invite
-      await updateDoc(doc(db, "invites", inviteDocId), {
+
+      // Update the invitation status
+      await setDoc(doc(db, "invites", params.code), {
+        ...invite,
         status: "accepted",
-        acceptedAt: serverTimestamp(),
-      });
+        acceptedAt: new Date(),
+        acceptedBy: user.uid,
+      }, { merge: true });
+
+      setAcceptComplete(true);
       
-      toast({
-        title: "Success!",
-        description: "Your account has been created. Redirecting to dashboard...",
-      });
-      
-      // User is already logged in after createUserWithEmailAndPassword
-      // Redirect to dashboard
+      // Redirect to dashboard after a short delay
       setTimeout(() => {
         router.push("/dashboard");
       }, 2000);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error accepting invite:", error);
-      setError(error instanceof Error ? error.message : "Failed to create your account.");
-      setAccepting(false);
+      toast({
+        title: "Error",
+        description: error.message || "There was an error accepting your invitation.",
+        variant: "destructive",
+      });
+    } finally {
+      setJoining(false);
     }
   };
 
-  const togglePasswordless = () => {
-    setPasswordless(!passwordless);
-    if (!passwordless) {
-      setPassword("");
-      setConfirmPassword("");
-    }
-  };
-  
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
+      <div className="flex items-center justify-center min-h-[300px]">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="ml-2">Loading invitation...</p>
       </div>
     );
   }
-  
-  if (error) {
+
+  if (!invite) {
     return (
-      <div className="container max-w-md py-12">
-        <Card>
-          <CardHeader>
-            <CardTitle>Invitation Error</CardTitle>
-            <CardDescription>There was a problem with your invitation.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-destructive">{error}</p>
-            {expired && (
-              <p className="mt-4">Please contact your administrator for a new invitation.</p>
-            )}
-          </CardContent>
-          <CardFooter>
-            <Button variant="outline" onClick={() => router.push("/login")}>
-              Go to Login
-            </Button>
-          </CardFooter>
-        </Card>
-      </div>
-    );
-  }
-  
-  return (
-    <div className="container max-w-md py-12">
       <Card>
         <CardHeader>
-          <CardTitle>Accept Invitation</CardTitle>
+          <CardTitle>Invalid Invitation</CardTitle>
           <CardDescription>
-            Complete your account setup to join {invite?.organizationName || "your organization"}.
+            This invitation link is invalid or has expired.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleAcceptInvite} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input 
-                id="email"
-                type="email"
-                value={invite?.email || ""}
-                disabled
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
-              <Input 
-                id="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </div>
-            
-            <div className="flex items-center space-x-2 my-4">
-              <input
-                type="checkbox"
-                id="passwordless"
-                checked={passwordless}
-                onChange={togglePasswordless}
-                className="h-4 w-4 text-primary"
-              />
-              <Label htmlFor="passwordless" className="cursor-pointer">
-                Use passwordless login (sign in with email link)
-              </Label>
-            </div>
-            
-            {!passwordless && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input 
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required={!passwordless}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirm Password</Label>
-                  <Input 
-                    id="confirmPassword"
-                    type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    required={!passwordless}
-                  />
-                </div>
-              </>
-            )}
-            
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            
-            <Button type="submit" className="w-full" disabled={accepting}>
-              {accepting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Setting up your account...
-                </>
-              ) : (
-                "Accept Invitation"
-              )}
-            </Button>
-          </form>
+        <CardFooter>
+          <Button onClick={() => router.push("/login")}>Go to Login</Button>
+        </CardFooter>
+      </Card>
+    );
+  }
+
+  if (acceptComplete) {
+    return (
+      <Card>
+        <CardHeader className="text-center">
+          <CheckCircle className="mx-auto h-12 w-12 text-green-500 mb-4" />
+          <CardTitle>Welcome to {invite.organizationName || "SimpleReimbursement"}!</CardTitle>
+          <CardDescription>
+            Your account has been successfully created.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-center">
+          <p className="text-muted-foreground">
+            You're being redirected to your dashboard...
+          </p>
         </CardContent>
       </Card>
+    );
+  }
+
+  return (
+    <Card className="w-full">
+      <CardHeader>
+        <CardTitle>Join {invite.organizationName || "SimpleReimbursement"}</CardTitle>
+        <CardDescription>
+          You've been invited to join {invite.organizationName || "an organization"} as a {invite.role || "team member"}.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Tabs defaultValue="passwordless" onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="passwordless">Passwordless</TabsTrigger>
+            <TabsTrigger value="password">Password</TabsTrigger>
+          </TabsList>
+          <TabsContent value="passwordless">
+            <form onSubmit={handleAcceptInvite} className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={!!invite.email}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="name">Full Name</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter your full name"
+                  required
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={joining}>
+                {joining ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending Link...
+                  </>
+                ) : (
+                  "Send Magic Link"
+                )}
+              </Button>
+            </form>
+          </TabsContent>
+          <TabsContent value="password">
+            <form onSubmit={handleAcceptInvite} className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label htmlFor="passwordEmail">Email</Label>
+                <Input
+                  id="passwordEmail"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={!!invite.email}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="passwordName">Full Name</Label>
+                <Input
+                  id="passwordName"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter your full name"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Create a password"
+                  required
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={joining}>
+                {joining ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating Account...
+                  </>
+                ) : (
+                  "Create Account"
+                )}
+              </Button>
+            </form>
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+      <CardFooter className="flex justify-center">
+        <p className="text-sm text-muted-foreground">
+          Already have an account?{" "}
+          <a href="/login" className="text-primary underline-offset-4 hover:underline">
+            Sign in
+          </a>
+        </p>
+      </CardFooter>
+    </Card>
+  );
+}
+
+export default function InvitePage({ params }: { params: { code: string } }) {
+  return (
+    <div className="container flex min-h-screen items-center justify-center py-10">
+      <Suspense fallback={
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-center">Loading invitation...</CardTitle>
+          </CardHeader>
+          <CardContent className="flex justify-center">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </CardContent>
+        </Card>
+      }>
+        <InviteContent params={params} />
+      </Suspense>
     </div>
   );
 } 

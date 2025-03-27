@@ -1,131 +1,176 @@
-'use client';
+"use client"
 
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/use-auth';
-import { Loader2 } from 'lucide-react';
+import { Suspense } from "react"
+import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
+import { useAuth } from "@/hooks/use-auth"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
+import { Badge } from "@/components/ui/badge"
+import { CheckCircle2, ChevronRight, Loader2, MailPlus, Settings, Users, FileCheck } from "lucide-react"
 
 type SetupStep = {
-  id: string;
-  title: string;
-  description: string;
-  completed: boolean;
-};
+  id: string
+  title: string
+  description: string
+  icon: React.ReactNode
+  completed: boolean
+}
 
-export default function AdminSetupPage() {
-  const router = useRouter();
-  const { user, isLoading } = useAuth();
+function AdminSetupContent() {
+  const router = useRouter()
+  const { user } = useAuth()
+  const [loading, setLoading] = useState(true)
   const [steps, setSteps] = useState<SetupStep[]>([
     {
-      id: 'profile',
-      title: 'Complete your profile',
-      description: 'Add your personal details and preferences',
-      completed: false,
+      id: "profile",
+      title: "Complete your profile",
+      description: "Set up your admin profile and preferences",
+      icon: <Settings className="h-5 w-5" />,
+      completed: false
     },
     {
-      id: 'company',
-      title: 'Configure company settings',
-      description: 'Add company details, logo, and expense categories',
-      completed: false,
+      id: "company",
+      title: "Configure company settings",
+      description: "Add company details and customize your organization",
+      icon: <Settings className="h-5 w-5" />,
+      completed: false
     },
     {
-      id: 'invite',
-      title: 'Invite team members',
-      description: 'Invite employees and other admins to your organization',
-      completed: false,
+      id: "invite",
+      title: "Invite team members",
+      description: "Add users to your organization",
+      icon: <MailPlus className="h-5 w-5" />,
+      completed: false
     },
     {
-      id: 'approval',
-      title: 'Set up approval workflows',
-      description: 'Configure expense approval rules and limits',
-      completed: false,
+      id: "workflow",
+      title: "Set up approval workflows",
+      description: "Configure expense approval process",
+      icon: <FileCheck className="h-5 w-5" />,
+      completed: false
     },
-  ]);
+  ])
 
   useEffect(() => {
-    // If not logged in, redirect to login
-    if (!isLoading && !user) {
-      router.push('/login');
+    // Redirect to login if not authenticated
+    if (!user && !loading) {
+      router.push('/login')
+    } else {
+      setLoading(false)
     }
-  }, [user, isLoading, router]);
+  }, [user, router, loading])
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  const completedSteps = steps.filter(step => step.completed).length;
-  const progress = (completedSteps / steps.length) * 100;
+  // Calculate completion percentage
+  const completedSteps = steps.filter(step => step.completed).length
+  const progressPercentage = Math.round((completedSteps / steps.length) * 100)
 
   const handleStepClick = (stepId: string) => {
-    // For now, we'll just mark the step as completed for demo purposes
-    setSteps(prevSteps =>
-      prevSteps.map(step =>
-        step.id === stepId ? { ...step, completed: true } : step
-      )
-    );
-  };
+    setSteps(steps.map(step => 
+      step.id === stepId ? { ...step, completed: !step.completed } : step
+    ))
+  }
+
+  const handleContinue = () => {
+    router.push('/admin/dashboard')
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    )
+  }
 
   return (
     <div className="container max-w-5xl py-10">
-      <div className="space-y-8">
-        <div>
-          <h1 className="text-3xl font-bold">Organization Setup</h1>
-          <p className="text-muted-foreground mt-2">
-            Complete these steps to get your organization ready for expense management
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex justify-between">
-            <span className="text-sm">Setup progress</span>
-            <span className="text-sm font-medium">{Math.round(progress)}%</span>
+      <Card className="mb-8">
+        <CardHeader>
+          <CardTitle className="text-2xl">Set Up Your Organization</CardTitle>
+          <CardDescription>
+            Complete these steps to set up your organization in SimpleReimbursement
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-sm font-medium">Setup Progress</div>
+              <div className="text-sm font-medium">{progressPercentage}% Complete</div>
+            </div>
+            <Progress value={progressPercentage} className="h-2" />
           </div>
-          <Progress value={progress} className="h-2" />
-        </div>
+        </CardContent>
+      </Card>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          {steps.map(step => (
-            <Card key={step.id} className={step.completed ? "border-green-200 bg-green-50/50 dark:bg-green-950/10" : ""}>
-              <CardHeader>
-                <CardTitle>{step.title}</CardTitle>
+      <div className="grid gap-4 md:grid-cols-2">
+        {steps.map((step) => (
+          <Card key={step.id} className={`cursor-pointer transition-all ${
+            step.completed ? 'border-green-200 bg-green-50/50' : ''
+          }`}>
+            <CardHeader className="flex flex-row items-center space-y-0 pb-2">
+              <div className="flex-1">
+                <CardTitle className="text-xl">
+                  {step.title}
+                  {step.completed && (
+                    <CheckCircle2 className="ml-2 inline-block h-5 w-5 text-green-500" />
+                  )}
+                </CardTitle>
                 <CardDescription>{step.description}</CardDescription>
-              </CardHeader>
-              <CardFooter>
-                <Button
-                  onClick={() => handleStepClick(step.id)}
-                  className="w-full"
-                  variant={step.completed ? "outline" : "default"}
-                >
-                  {step.completed ? "Completed" : "Start"}
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
+              </div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border bg-background">
+                {step.icon}
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="text-sm text-muted-foreground">
+                {step.completed ? 
+                  "Completed" : 
+                  "Not started yet"
+                }
+              </div>
+            </CardContent>
+            <CardFooter>
+              <Button 
+                variant={step.completed ? "outline" : "default"} 
+                className="w-full" 
+                onClick={() => handleStepClick(step.id)}
+              >
+                {step.completed ? "Mark as Incomplete" : "Start"}
+                {!step.completed && <ChevronRight className="ml-2 h-4 w-4" />}
+              </Button>
+            </CardFooter>
+          </Card>
+        ))}
+      </div>
 
-        <div className="flex justify-end">
-          <Button
-            onClick={() => router.push('/admin/dashboard')}
-            variant="outline"
-            className="mr-2"
-          >
-            Skip for now
-          </Button>
-          <Button
-            onClick={() => router.push('/admin/dashboard')}
-            disabled={completedSteps < steps.length}
-          >
-            Continue to Dashboard
-          </Button>
-        </div>
+      <div className="mt-8 flex justify-end space-x-4">
+        <Button variant="outline" onClick={() => router.push('/admin/dashboard')}>
+          Skip for now
+        </Button>
+        <Button 
+          onClick={handleContinue}
+          disabled={progressPercentage < 100}
+        >
+          {progressPercentage < 100 ? 
+            "Complete All Steps to Continue" : 
+            "Continue to Dashboard"
+          }
+        </Button>
       </div>
     </div>
-  );
+  )
+}
+
+export default function AdminSetupPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    }>
+      <AdminSetupContent />
+    </Suspense>
+  )
 } 

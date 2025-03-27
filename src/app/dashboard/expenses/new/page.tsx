@@ -1,42 +1,74 @@
 "use client"
 
-import { useState } from "react"
+import { Suspense, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { Plus, Upload } from "lucide-react"
-import { ExpenseForm } from "@/components/expenses/expense-form"
+import { Loader2, ReceiptIcon } from "lucide-react"
 
-export default function NewExpensePage() {
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [expenseType, setExpenseType] = useState<"single" | "report">("single")
+function NewExpenseContent() {
   const router = useRouter()
   const { toast } = useToast()
+  
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [formData, setFormData] = useState({
+    title: "",
+    amount: "",
+    date: new Date().toISOString().split("T")[0],
+    category: "",
+    description: "",
+    receipt: null as File | null,
+  })
 
-  const handleSubmitSingleExpense = async (formData: FormData) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFormData((prev) => ({ ...prev, receipt: e.target.files![0] }))
+    }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
     setIsSubmitting(true)
 
+    // TODO: Implement API call to submit expense
     try {
-      // In a real app, you would submit this to your API
-      console.log("Form data:", Object.fromEntries(formData.entries()))
+      // Validation
+      if (!formData.title || !formData.amount || !formData.category) {
+        throw new Error("Please fill in all required fields")
+      }
 
-      // Simulate API call
+      if (isNaN(parseFloat(formData.amount))) {
+        throw new Error("Amount must be a valid number")
+      }
+
+      // Mock successful submission
       await new Promise((resolve) => setTimeout(resolve, 1500))
 
       toast({
         title: "Expense submitted",
-        description: "Your expense has been submitted successfully.",
+        description: "Your expense has been submitted for approval.",
       })
 
-      router.push("/dashboard/expenses")
+      // Redirect back to expenses list
+      router.push("/dashboard")
     } catch (error) {
       toast({
         title: "Error",
-        description: "There was an error submitting your expense.",
+        description: error instanceof Error ? error.message : "Failed to submit expense",
         variant: "destructive",
       })
     } finally {
@@ -45,106 +77,145 @@ export default function NewExpensePage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Submit Expense</h1>
-        <p className="text-muted-foreground">Create a new expense or expense report</p>
-      </div>
-
+    <div className="max-w-2xl mx-auto">
       <Card>
         <CardHeader>
-          <CardTitle>Expense Type</CardTitle>
-          <CardDescription>
-            Choose whether to submit a single expense or create an expense report with multiple items
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Button
-              variant={expenseType === "single" ? "default" : "outline"}
-              className="h-auto flex-col items-start gap-1 p-4"
-              onClick={() => setExpenseType("single")}
-            >
-              <div className="flex w-full items-center justify-between">
-                <p className="text-lg font-medium">Single Expense</p>
-                <div className={`rounded-full p-1 ${expenseType === "single" ? "bg-white" : "bg-transparent"}`}>
-                  <Plus className={`h-4 w-4 ${expenseType === "single" ? "text-primary" : "text-muted-foreground"}`} />
-                </div>
-              </div>
-              <p className="text-sm text-left text-muted-foreground">Submit a single expense item with receipt</p>
-            </Button>
-            <Button
-              variant={expenseType === "report" ? "default" : "outline"}
-              className="h-auto flex-col items-start gap-1 p-4"
-              onClick={() => setExpenseType("report")}
-            >
-              <div className="flex w-full items-center justify-between">
-                <p className="text-lg font-medium">Expense Report</p>
-                <div className={`rounded-full p-1 ${expenseType === "report" ? "bg-white" : "bg-transparent"}`}>
-                  <Upload
-                    className={`h-4 w-4 ${expenseType === "report" ? "text-primary" : "text-muted-foreground"}`}
-                  />
-                </div>
-              </div>
-              <p className="text-sm text-left text-muted-foreground">Create a report with multiple expense items</p>
-            </Button>
+          <div className="flex items-center gap-4">
+            <ReceiptIcon className="h-6 w-6 text-primary" />
+            <div>
+              <CardTitle>New Expense</CardTitle>
+              <CardDescription>Submit a new expense for reimbursement</CardDescription>
+            </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {expenseType === "single" && <ExpenseForm onSubmit={handleSubmitSingleExpense} isSubmitting={isSubmitting} />}
-
-      {expenseType === "report" && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Create Expense Report</CardTitle>
-            <CardDescription>Group multiple expenses into a single report</CardDescription>
-          </CardHeader>
+        </CardHeader>
+        <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="report-title">Report Title</Label>
-              <Input id="report-title" placeholder="e.g., Business Trip to New York" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="report-description">Description</Label>
-              <Textarea id="report-description" placeholder="Provide details about this expense report" rows={3} />
-            </div>
-            <div className="space-y-2">
-              <Label>Date Range</Label>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="start-date" className="sr-only">
-                    Start Date
-                  </Label>
-                  <Input id="start-date" type="date" />
-                </div>
-                <div>
-                  <Label htmlFor="end-date" className="sr-only">
-                    End Date
-                  </Label>
-                  <Input id="end-date" type="date" />
-                </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="title">Title <span className="text-red-500">*</span></Label>
+                <Input
+                  id="title"
+                  name="title"
+                  placeholder="Lunch with client"
+                  value={formData.title}
+                  onChange={handleInputChange}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="amount">Amount ($) <span className="text-red-500">*</span></Label>
+                <Input
+                  id="amount"
+                  name="amount"
+                  type="number"
+                  placeholder="0.00"
+                  min="0.01"
+                  step="0.01"
+                  value={formData.amount}
+                  onChange={handleInputChange}
+                  required
+                />
               </div>
             </div>
 
-            <div className="rounded-lg border border-dashed p-8 text-center">
-              <div className="mx-auto flex max-w-[420px] flex-col items-center justify-center text-center">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted">
-                  <Plus className="h-5 w-5" />
-                </div>
-                <h3 className="mt-4 text-lg font-semibold">Add Expenses</h3>
-                <p className="mt-2 text-sm text-muted-foreground">Start adding individual expenses to this report</p>
-                <Button className="mt-4">Add First Expense</Button>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="date">Date <span className="text-red-500">*</span></Label>
+                <Input
+                  id="date"
+                  name="date"
+                  type="date"
+                  value={formData.date}
+                  onChange={handleInputChange}
+                  required
+                />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="category">Category <span className="text-red-500">*</span></Label>
+                <Select
+                  value={formData.category}
+                  onValueChange={(value) => handleSelectChange("category", value)}
+                >
+                  <SelectTrigger id="category">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="meals">Meals & Entertainment</SelectItem>
+                    <SelectItem value="travel">Travel</SelectItem>
+                    <SelectItem value="office">Office Supplies</SelectItem>
+                    <SelectItem value="software">Software & Services</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                name="description"
+                placeholder="Enter details about this expense..."
+                value={formData.description}
+                onChange={handleInputChange}
+                rows={3}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="receipt">Receipt Image</Label>
+              <Input
+                id="receipt"
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+              />
+              <p className="text-sm text-muted-foreground">
+                Upload a photo or scan of your receipt (JPG or PNG)
+              </p>
             </div>
           </CardContent>
           <CardFooter className="flex justify-between">
-            <Button variant="outline">Cancel</Button>
-            <Button disabled>Create Report</Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push("/dashboard")}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                "Submit Expense"
+              )}
+            </Button>
           </CardFooter>
-        </Card>
-      )}
+        </form>
+      </Card>
     </div>
+  )
+}
+
+export default function NewExpensePage() {
+  return (
+    <Suspense fallback={
+      <div className="max-w-2xl mx-auto">
+        <Card>
+          <CardHeader>
+            <CardTitle>Loading...</CardTitle>
+          </CardHeader>
+          <CardContent className="flex justify-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <NewExpenseContent />
+    </Suspense>
   )
 }
 
